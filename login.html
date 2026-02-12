@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UFOGALAXY - Вход</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0a0a2a;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .login-container {
+            background: #1a1a3c;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(100,100,255,0.5);
+            width: 350px;
+            text-align: center;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: #00cc66;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            background-image: url('ufo_galaxy_result.png');
+            background-size: cover;
+        }
+        h2 {
+            color: white;
+            margin-bottom: 30px;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 25px;
+            background: #3a3a7a;
+            color: white;
+            font-size: 16px;
+        }
+        input::placeholder {
+            color: #aaa;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 20px 0;
+            border: none;
+            border-radius: 25px;
+            background: #00cc66;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover {
+            background: #00aa55;
+        }
+        .register-link {
+            color: #aaa;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .register-link:hover {
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo"></div>
+        <h2>UFOGALAXY</h2>
+        <input type="text" id="username" placeholder="Имя пользователя">
+        <input type="password" id="password" placeholder="Пароль">
+        <button onclick="login()">Войти</button>
+        <p>Нет аккаунта? <a class="register-link" onclick="register()">Зарегистрироваться</a></p>
+    </div>
+
+    <script>
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('Введите имя и пароль');
+                return;
+            }
+            
+            fetch('/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, password})
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    localStorage.setItem('ufo_user', username);
+                    window.location.href = '/';
+                } else {
+                    alert('Неверный логин или пароль');
+                }
+            });
+        }
+
+        function register() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('Введите имя и пароль');
+                return;
+            }
+            
+            if (password.length < 3) {
+                alert('Пароль должен быть минимум 3 символа');
+                return;
+            }
+            
+            fetch('/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, password})
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Регистрация успешна! Теперь войдите.');
+                } else {
+                    alert('Это имя уже занято');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
