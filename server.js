@@ -10,10 +10,10 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// ===== СЕКРЕТНЫЙ КЛЮЧ ДЛЯ ШИФРОВАНИЯ =====
+// ===== СЕКРЕТНЫЙ КЛЮЧ =====
 const SECRET_KEY = 'ufogalaxy-beto-test-2026-super-secure';
 
-// ===== ФУНКЦИИ ШИФРОВАНИЯ =====
+// ===== ШИФРОВАНИЕ =====
 function encrypt(text) {
     try {
         const cipher = crypto.createCipher('aes-256-cbc', SECRET_KEY);
@@ -21,7 +21,6 @@ function encrypt(text) {
         encrypted += cipher.final('hex');
         return encrypted;
     } catch (e) {
-        console.error('Ошибка шифрования:', e);
         return text;
     }
 }
@@ -33,8 +32,7 @@ function decrypt(encryptedText) {
         decrypted += decipher.final('utf8');
         return decrypted;
     } catch (e) {
-        console.error('Ошибка дешифровки:', e);
-        return '[🔐 ЗАШИФРОВАННОЕ СООБЩЕНИЕ]';
+        return '[🔐 ЗАШИФРОВАНО]';
     }
 }
 
@@ -101,7 +99,7 @@ if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads');
 }
 
-// ===== НАСТРОЙКА MULTER =====
+// ===== MULTER =====
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         cb(null, 'uploads/');
@@ -115,7 +113,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 50 * 1024 * 1024 } // 50MB
+    limits: { fileSize: 50 * 1024 * 1024 }
 });
 
 app.use(express.static(path.join(__dirname)));
@@ -127,7 +125,6 @@ app.post('/upload-file', upload.single('file'), (req, res) => {
     if (!req.file) {
         return res.json({ success: false });
     }
-    
     const fileUrl = '/uploads/' + req.file.filename;
     res.json({
         success: true,
@@ -141,11 +138,9 @@ app.post('/upload-file', upload.single('file'), (req, res) => {
 // ===== РЕГИСТРАЦИЯ =====
 app.post('/register', (req, res) => {
     const { username, password } = req.body;
-    
     if (users.find(u => u.username === username)) {
         return res.json({ success: false });
     }
-    
     users.push({ 
         username, 
         password, 
@@ -155,9 +150,7 @@ app.post('/register', (req, res) => {
         theme: 'dark',
         registeredAt: new Date().toISOString()
     });
-    
     saveUsers();
-    console.log(`✅ Новый пользователь: ${username}`);
     res.json({ success: true });
 });
 
@@ -172,7 +165,6 @@ app.post('/login', (req, res) => {
 app.get('/user/settings/:username', (req, res) => {
     const user = users.find(u => u.username === req.params.username);
     if (!user) return res.json({ theme: 'dark', favoriteChats: [] });
-    
     res.json({
         theme: user.theme || 'dark',
         favoriteChats: user.favoriteChats || []
@@ -182,7 +174,6 @@ app.get('/user/settings/:username', (req, res) => {
 app.post('/user/settings', (req, res) => {
     const { username, theme, favoriteChats } = req.body;
     const user = users.find(u => u.username === username);
-    
     if (user) {
         if (theme) user.theme = theme;
         if (favoriteChats !== undefined) user.favoriteChats = favoriteChats;
@@ -198,7 +189,6 @@ app.get('/users', (req, res) => {
     const { username } = req.query;
     const user = users.find(u => u.username === username);
     if (!user) return res.json([]);
-    
     const usersList = users
         .filter(u => u.username !== username)
         .map(u => ({
@@ -239,16 +229,13 @@ app.post('/accept-friend', (req, res) => {
     const { username, friend } = req.body;
     const user = users.find(u => u.username === username);
     const friendUser = users.find(u => u.username === friend);
-    
     if (user && friendUser) {
         if (!user.friends) user.friends = [];
         if (!friendUser.friends) friendUser.friends = [];
-        
         user.friends.push(friend);
         friendUser.friends.push(username);
         user.friendRequests = user.friendRequests.filter(f => f !== friend);
         saveUsers();
-        
         const privateChatId = [username, friend].sort().join('-');
         if (!chats.find(c => c.id === privateChatId)) {
             chats.push({
@@ -310,7 +297,6 @@ app.get('/chats/:username', (req, res) => {
     const username = req.params.username;
     const user = users.find(u => u.username === username);
     const favoriteChats = user?.favoriteChats || [];
-    
     const userChats = chats.filter(chat => {
         if (chat.id === 'general') return true;
         if (chat.type === 'public' && !chat.isPrivate) return true;
@@ -322,14 +308,12 @@ app.get('/chats/:username', (req, res) => {
         ...chat,
         isFavorite: favoriteChats.includes(chat.id)
     }));
-    
     res.json(userChats);
 });
 
 app.post('/chats', (req, res) => {
     const { name, username, type, isPrivate } = req.body;
     const id = type === 'channel' ? 'channel-' + Date.now() : 'chat-' + Date.now();
-    
     const newChat = { 
         id, 
         name, 
@@ -340,7 +324,6 @@ app.post('/chats', (req, res) => {
         allowedUsers: isPrivate ? [username] : [],
         participants: type === 'private' ? [username] : []
     };
-    
     chats.push(newChat);
     saveChats();
     res.json(newChat);
@@ -350,7 +333,6 @@ app.delete('/chats/:chatId', (req, res) => {
     const { chatId } = req.params;
     const { username } = req.body;
     const chatIndex = chats.findIndex(c => c.id === chatId);
-    
     if (chatIndex !== -1) {
         const chat = chats[chatIndex];
         if (chat.createdBy === username || username === 'system') {
@@ -365,7 +347,7 @@ app.delete('/chats/:chatId', (req, res) => {
     }
 });
 
-// ===== ИСТОРИЯ С ШИФРОВАНИЕМ =====
+// ===== ИСТОРИЯ =====
 app.get('/history/:chatId', (req, res) => {
     const chatMessages = messages
         .filter(m => m.chatId === req.params.chatId)
@@ -381,7 +363,38 @@ app.get('/user/messages/count/:username', (req, res) => {
     res.json({ count });
 });
 
-// ===== SOCKET.IO С ШИФРОВАНИЕМ =====
+// ===== РЕДАКТИРОВАНИЕ СООБЩЕНИЯ =====
+app.post('/edit-message', (req, res) => {
+    const { messageId, newText, username } = req.body;
+    const message = messages.find(m => m.id == messageId);
+    
+    if (message && message.username === username) {
+        // Шифруем новый текст
+        message.text = encrypt(newText);
+        message.edited = true;
+        message.editedAt = new Date().toISOString();
+        saveHistory();
+        res.json({ success: true });
+    } else {
+        res.json({ success: false });
+    }
+});
+
+// ===== УДАЛЕНИЕ СООБЩЕНИЯ =====
+app.post('/delete-message', (req, res) => {
+    const { messageId, username } = req.body;
+    const index = messages.findIndex(m => m.id == messageId);
+    
+    if (index !== -1 && messages[index].username === username) {
+        messages.splice(index, 1);
+        saveHistory();
+        res.json({ success: true });
+    } else {
+        res.json({ success: false });
+    }
+});
+
+// ===== SOCKET.IO =====
 io.on('connection', (socket) => {
     console.log('👤 Пользователь подключился');
     
@@ -390,7 +403,6 @@ io.on('connection', (socket) => {
     });
     
     socket.on('chat message', (data) => {
-        // Шифруем сообщение перед сохранением
         const encryptedText = data.text ? encrypt(data.text) : '';
         
         const messageData = {
@@ -398,7 +410,8 @@ io.on('connection', (socket) => {
             text: encryptedText,
             time: new Date().toISOString(),
             id: Date.now() + Math.random(),
-            replyTo: data.replyTo || null
+            replyTo: data.replyTo || null,
+            edited: false
         };
         
         messages.push(messageData);
@@ -407,7 +420,7 @@ io.on('connection', (socket) => {
         // Отправляем всем расшифрованное сообщение
         io.to(data.chatId).emit('chat message', {
             ...messageData,
-            text: data.text // Оригинальный текст
+            text: data.text
         });
     });
     
@@ -420,16 +433,13 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n=================================`);
-    console.log(`🚀 UFOGALAXY МЕССЕНДЖЕР ЗАПУЩЕН!`);
+    console.log(`🚀 UFOGALAXY ЗАПУЩЕН!`);
     console.log(`🌐 http://localhost:${PORT}`);
     console.log(`=================================`);
-    console.log(`🔐 ШИФРОВАНИЕ: ✅ AES-256-CBC`);
-    console.log(`📎 ФАЙЛЫ: ✅ 50MB макс`);
-    console.log(`🎨 ТЕМЫ: ✅ Работают`);
-    console.log(`📜 ПРОКРУТКА: ✅ Работает`);
-    console.log(`🗑️ УДАЛЕНИЕ: ✅ Работает`);
-    console.log(`=================================`);
-    console.log(`📊 Версия: Beto-test 1.2`);
-    console.log(`📅 Дата: ${new Date().toLocaleDateString('ru-RU')}`);
+    console.log(`🔐 ШИФРОВАНИЕ: ✅`);
+    console.log(`🎤 ГОЛОС: ✅`);
+    console.log(`✏️ РЕДАКТИРОВАНИЕ: ✅`);
+    console.log(`🗑️ УДАЛЕНИЕ: ✅`);
+    console.log(`📎 ФАЙЛЫ: ✅ 50MB`);
     console.log(`=================================\n`);
 });
