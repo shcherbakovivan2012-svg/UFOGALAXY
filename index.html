@@ -245,6 +245,8 @@
             display: flex;
             flex-direction: column;
         }
+        
+        /* ===== СООБЩЕНИЯ ===== */
         .message {
             padding: 10px 15px;
             border-radius: 18px;
@@ -262,6 +264,33 @@
             align-self: flex-start; 
             color: var(--text-primary);
         }
+        
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        .message-username {
+            color: var(--text-secondary);
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: underline dotted;
+        }
+        .message-username:hover { color: var(--accent-color); }
+        
+        .message-text {
+            word-break: break-word;
+            margin-bottom: 5px;
+        }
+        .edited-tag {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-style: italic;
+            margin-left: 5px;
+        }
+        
         .message-image {
             max-width: 100%;
             max-height: 300px;
@@ -281,7 +310,6 @@
         }
         .file-attachment:hover { background: rgba(0,0,0,0.3); }
         
-        /* ===== АУДИО ПЛЕЕР ===== */
         .voice-message {
             display: flex;
             align-items: center;
@@ -295,8 +323,27 @@
             width: 200px;
             height: 40px;
         }
-        @media (max-width: 768px) {
-            .voice-message audio { width: 150px; }
+        
+        .message-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+        .message-action-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: var(--text-secondary);
+            padding: 4px 10px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: 0.2s;
+        }
+        .message-action-btn:hover {
+            background: var(--accent-color);
+            color: white;
         }
         
         .time {
@@ -304,6 +351,11 @@
             color: var(--text-muted);
             margin-top: 4px;
             text-align: right;
+        }
+
+        @media (max-width: 768px) {
+            .voice-message audio { width: 150px; }
+            .message { max-width: 85%; }
         }
 
         .input-area {
@@ -330,7 +382,6 @@
         }
         .attach-btn:hover { background: var(--bg-hover); }
         
-        /* ===== КНОПКА МИКРОФОНА ===== */
         .mic-btn {
             background: var(--input-bg);
             color: var(--text-primary);
@@ -660,12 +711,13 @@
             <div class="version-info">
                 <div>🚀 UFOGALAXY Messenger</div>
                 <div style="margin-top: 5px;">
-                    <span class="version-number">Версия Beto-test 1.2</span>
+                    <span class="version-number">Версия Beto-test 2.0</span>
                 </div>
                 <div style="margin-top: 10px; font-size: 12px;">
                     🔐 Шифрование AES-256-CBC<br>
                     🎤 Голосовые сообщения<br>
-                    📎 Поддержка файлов 50MB
+                    📎 Поддержка файлов 50MB<br>
+                    ✏️ Редактирование и ответы
                 </div>
             </div>
             <div class="modal-buttons" style="margin-top: 20px;">
@@ -1213,6 +1265,56 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
         }
 
+        // ===== РЕДАКТИРОВАНИЕ И УДАЛЕНИЕ СООБЩЕНИЙ =====
+        function editMessage(messageId, oldText) {
+            const newText = prompt('Редактировать сообщение:', oldText);
+            if (newText && newText.trim() && newText !== oldText) {
+                fetch('/edit-message', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        messageId,
+                        newText: newText.trim(),
+                        username: currentUser
+                    })
+                }).then(res => res.json()).then(data => {
+                    if (data.success) {
+                        const msgElement = document.querySelector(`[data-message-id="${messageId}"]`);
+                        if (msgElement) {
+                            const textDiv = msgElement.querySelector('.message-text');
+                            if (textDiv) {
+                                textDiv.innerHTML = newText.trim() + '<span class="edited-tag"> (ред.)</span>';
+                            }
+                        }
+                        showNotification('✏️ Сообщение отредактировано');
+                    }
+                });
+            }
+        }
+
+        function deleteMessage(messageId) {
+            if (confirm('Удалить сообщение?')) {
+                fetch('/delete-message', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ messageId, username: currentUser })
+                }).then(res => res.json()).then(data => {
+                    if (data.success) {
+                        const msgElement = document.querySelector(`[data-message-id="${messageId}"]`);
+                        if (msgElement) msgElement.remove();
+                        showNotification('🗑️ Сообщение удалено');
+                    }
+                });
+            }
+        }
+
+        function setReply(messageId, username, text) {
+            // Сохраняем ID сообщения, на которое отвечаем
+            window.replyToMessage = { id: messageId, username, text };
+            showNotification(`↩️ Ответ для ${username}`);
+            document.getElementById('messageInput').focus();
+        }
+
         // ===== ЧАТ =====
         function switchChat(chatId, chatName) {
             currentChatId = chatId;
@@ -1236,13 +1338,41 @@
             
             const div = document.createElement('div');
             div.className = 'message ' + (isMyMessage ? 'my-message' : 'other-message');
+            div.setAttribute('data-message-id', msg.id);
             
+            // ===== ШАПКА СООБЩЕНИЯ (НИК) =====
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'message-header';
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'message-username';
+            nameSpan.textContent = isMyMessage ? 'Вы' : msg.username;
+            if (!isMyMessage) {
+                nameSpan.onclick = (e) => {
+                    e.stopPropagation();
+                    openProfile(msg.username);
+                };
+            }
+            headerDiv.appendChild(nameSpan);
+            div.appendChild(headerDiv);
+            
+            // ===== ТЕКСТ СООБЩЕНИЯ =====
             if (msg.text && msg.text !== '🎤 Голосовое сообщение') {
                 const textDiv = document.createElement('div');
+                textDiv.className = 'message-text';
                 textDiv.textContent = msg.text;
+                if (msg.edited) {
+                    textDiv.innerHTML = msg.text + '<span class="edited-tag"> (ред.)</span>';
+                }
+                div.appendChild(textDiv);
+            } else if (msg.text === '🎤 Голосовое сообщение') {
+                const textDiv = document.createElement('div');
+                textDiv.className = 'message-text';
+                textDiv.textContent = '🎤 Голосовое сообщение';
                 div.appendChild(textDiv);
             }
             
+            // ===== ФАЙЛЫ, ФОТКИ, ГОЛОС =====
             if (msg.file) {
                 if (msg.file.type.startsWith('image/')) {
                     const img = document.createElement('img');
@@ -1275,11 +1405,39 @@
                 }
             }
             
+            // ===== ВРЕМЯ =====
             const timeDiv = document.createElement('div');
             timeDiv.className = 'time';
             timeDiv.textContent = new Date(msg.time).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             div.appendChild(timeDiv);
             
+            // ===== КНОПКИ ДЕЙСТВИЙ =====
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'message-actions';
+            
+            // Кнопка ответа (для всех)
+            const replyBtn = document.createElement('button');
+            replyBtn.className = 'message-action-btn';
+            replyBtn.textContent = '↩️ Ответить';
+            replyBtn.onclick = () => setReply(msg.id, msg.username, msg.text || 'Голосовое');
+            actionsDiv.appendChild(replyBtn);
+            
+            // Кнопки редактирования и удаления (только для своих сообщений)
+            if (isMyMessage && msg.text && msg.text !== '🎤 Голосовое сообщение') {
+                const editBtn = document.createElement('button');
+                editBtn.className = 'message-action-btn';
+                editBtn.textContent = '✏️ Редакт.';
+                editBtn.onclick = () => editMessage(msg.id, msg.text);
+                actionsDiv.appendChild(editBtn);
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'message-action-btn';
+                deleteBtn.textContent = '🗑️ Удалить';
+                deleteBtn.onclick = () => deleteMessage(msg.id);
+                actionsDiv.appendChild(deleteBtn);
+            }
+            
+            div.appendChild(actionsDiv);
             messagesContainer.appendChild(div);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
@@ -1288,11 +1446,23 @@
             const input = document.getElementById('messageInput');
             const text = input.value.trim();
             if (text) {
-                socket.emit('chat message', { 
-                    chatId: currentChatId, 
-                    text, 
-                    username: currentUser 
-                });
+                const messageData = {
+                    chatId: currentChatId,
+                    text,
+                    username: currentUser
+                };
+                
+                // Добавляем информацию об ответе, если есть
+                if (window.replyToMessage) {
+                    messageData.replyTo = {
+                        id: window.replyToMessage.id,
+                        username: window.replyToMessage.username,
+                        text: window.replyToMessage.text
+                    };
+                    window.replyToMessage = null;
+                }
+                
+                socket.emit('chat message', messageData);
                 input.value = '';
             }
         }
